@@ -102,6 +102,13 @@ object Server extends App with CorsSupport {
             }
           }
         }
+      } ~
+      path("keycloak-json"){
+        get {
+          explicitlyAccepts(`application/json`) {
+            getFromResource("assets/keycloak.json")
+          }
+        }
       }
     } ~
     (get & pathEndOrSingleSlash) {
