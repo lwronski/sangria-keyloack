@@ -130,6 +130,30 @@
             history.replaceState(null, null, newSearch);
           }
 
+          function init(graphQLParams){
+            const isDev = !window.location.hostname.match(/(^|\.)netlify\.com$|(^|\.)graphql\.org$/)
+            const api = isDev ? '/graphql' : 'https://swapi.graph.cool/'
+            return fetch(api, {
+                  method: 'post',
+                  headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + keycloak.token,
+                  },
+                  body: JSON.stringify(graphQLParams),
+                  credentials: 'include',
+                }).then(function (response) {
+                  return response.text();
+                }).then(function (responseBody) {
+                  try {
+                    return JSON.parse(responseBody);
+                  } catch (error) {
+                    return responseBody;
+                  }
+                });
+              
+          }
+
           // Defines a GraphQL fetcher using the fetch API. You're not required to
           // use fetch, and could instead implement graphQLFetcher however you like,
           // as long as it returns a Promise or Observable.
@@ -137,26 +161,14 @@
             // When working locally, the example expects a GraphQL server at the path /graphql.
             // In a PR preview, it connects to the Star Wars API externally.
             // Change this to point wherever you host your GraphQL server.
-            const isDev = !window.location.hostname.match(/(^|\.)netlify\.com$|(^|\.)graphql\.org$/)
-            const api = isDev ? '/graphql' : 'https://swapi.graph.cool/'
-            return fetch(api, {
-              method: 'post',
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + keycloak.token,
-              },
-              body: JSON.stringify(graphQLParams),
-              credentials: 'include',
-            }).then(function (response) {
-              return response.text();
-            }).then(function (responseBody) {
-              try {
-                return JSON.parse(responseBody);
-              } catch (error) {
-                return responseBody;
-              }
-            });
+            
+            if( keycloak.isTokenExpired() ) {
+              return new Promise((resolve, reject) => {
+                keycloak.updateToken().success(result => resolve(result)).error(reject())
+              }).then(result => init(graphQLParams));
+            } else {
+              return init(graphQLParams);
+            }
           }
 
           // Render <GraphiQL /> into the body.
