@@ -15,13 +15,23 @@ import de.heikoseeberger.akkahttpcirce.ErrorAccumulatingCirceSupport._
 import io.circe._
 import io.circe.optics.JsonPath._
 import io.circe.parser._
+import scala.concurrent.duration._
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.directives.RouteDirectives.complete
+import akka.http.scaladsl.server.directives.PathDirectives.path
+import akka.pattern.ask
+import akka.util.Timeout
+import akka.actor.{ ActorRef, ActorSystem }
+import akka.event.Logging
 
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 import GraphQLRequestUnmarshaller._
+import akka.http.scaladsl.model.HttpResponse
 import sangria.slowlog.SlowLog
 
-object Server extends App with CorsSupport {
+object Server extends App with CorsSupport  with AuthorizationHandler {
   implicit val system = ActorSystem("sangria-server")
   implicit val materializer = ActorMaterializer()
 
@@ -76,7 +86,10 @@ object Server extends App with CorsSupport {
           }
         } ~
         post {
-          parameters('query.?, 'operationName.?, 'variables.?) { (queryParam, operationNameParam, variablesParam) ⇒
+          authorize { token =>
+            complete(BadRequest, formatError("No query to execute"))
+          } ~
+            parameters('query.?, 'operationName.?, 'variables.?) { (queryParam, operationNameParam, variablesParam) ⇒
             entity(as[Json]) { body ⇒
               val query = queryParam orElse root.query.string.getOption(body)
               val operationName = operationNameParam orElse root.operationName.string.getOption(body)
