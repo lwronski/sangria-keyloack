@@ -87,21 +87,37 @@
             }
           }
 
+         function refreshToken() {
+          if( keycloak.isTokenExpired() ) {
+              keycloak.updateToken().success(function(refreshed) {
+                  if (!refreshed) {
+                      alert('Token not refreshed');
+                  }
+              }).error(function() {
+                  alert('Failed to refresh token');
+              });
+             }
+
+           }
+
           // When the query and variables string is edited, update the URL bar so
           // that it can be easily shared
           function onEditQuery(newQuery) {
             parameters.query = newQuery;
             updateURL();
+            refreshToken();
           }
 
           function onEditVariables(newVariables) {
             parameters.variables = newVariables;
             updateURL();
+            refreshToken();
           }
 
           function onEditOperationName(newOperationName) {
             parameters.operationName = newOperationName;
             updateURL();
+            refreshToken();
           }
 
           function updateURL() {
@@ -128,6 +144,7 @@
               headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + keycloak.token,
               },
               body: JSON.stringify(graphQLParams),
               credentials: 'include',
