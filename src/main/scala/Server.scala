@@ -31,11 +31,48 @@ import GraphQLRequestUnmarshaller._
 import akka.http.scaladsl.model.HttpResponse
 import sangria.slowlog.SlowLog
 
+import akka.actor.ActorSystem
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model._
+
+import scala.concurrent.Future
+import scala.util.{ Failure, Success }
+
+import akka.util.ByteString
+
+import scala.io._
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import spray.json.DefaultJsonProtocol._
+import MyJsonProtocol._
+
 object Server extends App with CorsSupport  with AuthorizationHandler {
   implicit val system = ActorSystem("sangria-server")
   implicit val materializer = ActorMaterializer()
 
   import system.dispatcher
+
+  val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = "http://localhost:8080/auth/realms/demo/protocol/openid-connect/certs"))
+  
+  responseFuture
+    .onComplete {
+      case Success(res) => receive(res)
+      case Failure(_)   => sys.error("something wrong")
+    }
+  val jsonKeycloakParser = {
+    MyJsonProtocol
+  }
+
+  def receive(res: HttpResponse) = res match {
+    case HttpResponse(StatusCodes.OK, headers, entity, _) =>
+      entity.dataBytes.runFold(ByteString(""))(_ ++ _).foreach { body =>
+        println("Got response, body: " + body.utf8String)
+        val test = jsonKeycloakParser.parseKeycloak(jsonKeycloakParser.testJson)
+        println(test.keys(0)("e"))
+      }
+    case resp @ HttpResponse(code, _, _, _) =>
+      println("Request failed, response code: " + code)
+      resp.discardEntityBytes()
+  }
 
   def executeGraphQL(query: Document, operationName: Option[String], variables: Json, tracing: Boolean) =
     complete(Executor.execute(SchemaDefinition.StarWarsSchema, query, new CharacterRepo,
