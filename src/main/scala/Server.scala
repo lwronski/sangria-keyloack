@@ -15,6 +15,7 @@ import de.heikoseeberger.akkahttpcirce.ErrorAccumulatingCirceSupport._
 import io.circe._
 import io.circe.optics.JsonPath._
 import io.circe.parser._
+
 import scala.concurrent.duration._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
@@ -22,13 +23,15 @@ import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.http.scaladsl.server.directives.PathDirectives.path
 import akka.pattern.ask
 import akka.util.Timeout
-import akka.actor.{ ActorRef, ActorSystem }
+import akka.actor.{ActorRef, ActorSystem}
 import akka.event.Logging
 
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 import GraphQLRequestUnmarshaller._
+import akka.http.javadsl.server.AuthorizationFailedRejection
 import akka.http.scaladsl.model.HttpResponse
+import org.keycloak.exceptions.TokenNotActiveException
 import sangria.slowlog.SlowLog
 
 object Server extends App with CorsSupport  with AuthorizationHandler {
@@ -63,70 +66,77 @@ object Server extends App with CorsSupport  with AuthorizationHandler {
       throw e
   }
 
+  val myExceptionHandler = ExceptionHandler {
+    case _: TokenNotActiveException => {
+        complete(BadRequest, formatError("Invalid token"))
+      }
+  }
+
   def formatError(message: String): Json =
     Json.obj("errors" → Json.arr(Json.obj("message" → Json.fromString(message))))
 
   val route: Route =
-    optionalHeaderValueByName("X-Apollo-Tracing") { tracing ⇒
-      path("graphql") {
-        get {
-          explicitlyAccepts(`text/html`) {
-            getFromResource("assets/graphiql.html")
-          } ~
-          parameters('query, 'operationName.?, 'variables.?) { (query, operationName, variables) ⇒
-            QueryParser.parse(query) match {
-              case Success(ast) ⇒
-                variables.map(parse) match {
-                  case Some(Left(error)) ⇒ complete(BadRequest, formatError(error))
-                  case Some(Right(json)) ⇒ executeGraphQL(ast, operationName, json, tracing.isDefined)
-                  case None ⇒ executeGraphQL(ast, operationName, Json.obj(), tracing.isDefined)
-                }
-              case Failure(error) ⇒ complete(BadRequest, formatError(error))
-            }
-          }
-        } ~
-        post {
-          authorize { token =>
-            complete(BadRequest, formatError("No query to execute"))
-          } ~
-            parameters('query.?, 'operationName.?, 'variables.?) { (queryParam, operationNameParam, variablesParam) ⇒
-            entity(as[Json]) { body ⇒
-              val query = queryParam orElse root.query.string.getOption(body)
-              val operationName = operationNameParam orElse root.operationName.string.getOption(body)
-              val variablesStr = variablesParam orElse root.variables.string.getOption(body)
-
-              query.map(QueryParser.parse(_)) match {
-                case Some(Success(ast)) ⇒
-                  variablesStr.map(parse) match {
-                    case Some(Left(error)) ⇒ complete(BadRequest, formatError(error))
-                    case Some(Right(json)) ⇒ executeGraphQL(ast, operationName, json, tracing.isDefined)
-                    case None ⇒ executeGraphQL(ast, operationName, root.variables.json.getOption(body) getOrElse Json.obj(), tracing.isDefined)
-                  }
-                case Some(Failure(error)) ⇒ complete(BadRequest, formatError(error))
-                case None ⇒ complete(BadRequest, formatError("No query to execute"))
-              }
+    handleExceptions(myExceptionHandler) {
+      optionalHeaderValueByName("X-Apollo-Tracing") { tracing ⇒
+        path("graphql") {
+          get {
+            explicitlyAccepts(`text/html`) {
+              getFromResource("assets/graphiql.html")
             } ~
-            entity(as[Document]) { document ⇒
-              variablesParam.map(parse) match {
-                case Some(Left(error)) ⇒ complete(BadRequest, formatError(error))
-                case Some(Right(json)) ⇒ executeGraphQL(document, operationNameParam, json, tracing.isDefined)
-                case None ⇒ executeGraphQL(document, operationNameParam, Json.obj(), tracing.isDefined)
+              parameters('query, 'operationName.?, 'variables.?) { (query, operationName, variables) ⇒
+                QueryParser.parse(query) match {
+                  case Success(ast) ⇒
+                    variables.map(parse) match {
+                      case Some(Left(error)) ⇒ complete(BadRequest, formatError(error))
+                      case Some(Right(json)) ⇒ executeGraphQL(ast, operationName, json, tracing.isDefined)
+                      case None ⇒ executeGraphQL(ast, operationName, Json.obj(), tracing.isDefined)
+                    }
+                  case Failure(error) ⇒ complete(BadRequest, formatError(error))
+                }
+              }
+          } ~
+            post {
+              authorize { token =>
+                complete(BadRequest, formatError("No query to execute"))
+              } ~
+                parameters('query.?, 'operationName.?, 'variables.?) { (queryParam, operationNameParam, variablesParam) ⇒
+                  entity(as[Json]) { body ⇒
+                    val query = queryParam orElse root.query.string.getOption(body)
+                    val operationName = operationNameParam orElse root.operationName.string.getOption(body)
+                    val variablesStr = variablesParam orElse root.variables.string.getOption(body)
+
+                    query.map(QueryParser.parse(_)) match {
+                      case Some(Success(ast)) ⇒
+                        variablesStr.map(parse) match {
+                          case Some(Left(error)) ⇒ complete(BadRequest, formatError(error))
+                          case Some(Right(json)) ⇒ executeGraphQL(ast, operationName, json, tracing.isDefined)
+                          case None ⇒ executeGraphQL(ast, operationName, root.variables.json.getOption(body) getOrElse Json.obj(), tracing.isDefined)
+                        }
+                      case Some(Failure(error)) ⇒ complete(BadRequest, formatError(error))
+                      case None ⇒ complete(BadRequest, formatError("No query to execute"))
+                    }
+                  } ~
+                    entity(as[Document]) { document ⇒
+                      variablesParam.map(parse) match {
+                        case Some(Left(error)) ⇒ complete(BadRequest, formatError(error))
+                        case Some(Right(json)) ⇒ executeGraphQL(document, operationNameParam, json, tracing.isDefined)
+                        case None ⇒ executeGraphQL(document, operationNameParam, Json.obj(), tracing.isDefined)
+                      }
+                    }
+                }
+            }
+        } ~
+          path("keycloak-json") {
+            get {
+              explicitlyAccepts(`application/json`) {
+                getFromResource("assets/keycloak.json")
               }
             }
           }
-        }
       } ~
-      path("keycloak-json"){
-        get {
-          explicitlyAccepts(`application/json`) {
-            getFromResource("assets/keycloak.json")
-          }
+        (get & pathEndOrSingleSlash) {
+          redirect("/graphql", PermanentRedirect)
         }
-      }
-    } ~
-    (get & pathEndOrSingleSlash) {
-      redirect("/graphql", PermanentRedirect)
     }
-
   Http().bindAndHandle(corsHandler(route), "0.0.0.0", sys.props.get("http.port").fold(3000)(_.toInt))
 }

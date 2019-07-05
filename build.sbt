@@ -6,6 +6,10 @@ description := "An example GraphQL server written with akka-http, circe and sang
 scalaVersion := "2.12.6"
 scalacOptions ++= Seq("-deprecation", "-feature")
 
+val akkaVersion = "2.5.23"
+val akkaHttpVersion = "10.1.8"
+val keycloakVersion = "6.0.1"
+
 libraryDependencies ++= Seq(
   "org.sangria-graphql" %% "sangria" % "1.4.2",
   "org.sangria-graphql" %% "sangria-slowlog" % "0.1.8",
@@ -18,15 +22,17 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser" % "0.9.3",
   "io.circe" %% "circe-optics" % "0.9.3",
 
-  "org.keycloak"      % "keycloak-core"         % "4.0.0.Final",
-  "org.keycloak"      % "keycloak-adapter-core" % "4.0.0.Final",
-  "org.jboss.logging" % "jboss-logging"         % "3.3.0.Final",
-  "org.apache.httpcomponents" % "httpclient" % "4.5.1",
+  "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
+  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
+  "org.keycloak" % "keycloak-adapter-core" % keycloakVersion,
+  "org.keycloak" % "keycloak-core" % keycloakVersion,
+  "org.apache.httpcomponents" % "httpclient" %  "4.5.1",
 
   "io.spray" %%  "spray-json" % "1.3.5",
 
 //  "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8",
-
+  
+  "org.jboss.logging" % "jboss-logging" % "3.4.0.Final",
   "org.scalatest" %% "scalatest" % "3.0.5" % Test
 )
 
