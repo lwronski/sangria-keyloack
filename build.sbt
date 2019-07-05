@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
   "org.jboss.logging" % "jboss-logging"         % "3.3.0.Final",
   "org.apache.httpcomponents" % "httpclient" % "4.5.1",
   "net.liftweb" %% "lift-json" % "3.3.0",
-  
+  "com.pauldijou" %% "jwt-core" % "0.18.0",
   "io.spray" %%  "spray-json" % "1.3.5",
 
 //  "com.typesafe.akka" %% "akka-http-spray-json" % "10.1.8",

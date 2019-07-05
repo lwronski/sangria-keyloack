@@ -52,7 +52,7 @@ object Server extends App with CorsSupport  with AuthorizationHandler {
   import system.dispatcher
 
   val responseFuture: Future[HttpResponse] = Http().singleRequest(HttpRequest(uri = "http://localhost:8080/auth/realms/demo/protocol/openid-connect/certs"))
-  
+
   responseFuture
     .onComplete {
       case Success(res) => receive(res)
