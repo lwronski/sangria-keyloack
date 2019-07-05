@@ -66,8 +66,7 @@ object Server extends App with CorsSupport  with AuthorizationHandler {
     case HttpResponse(StatusCodes.OK, headers, entity, _) =>
       entity.dataBytes.runFold(ByteString(""))(_ ++ _).foreach { body =>
         println("Got response, body: " + body.utf8String)
-        val test = jsonKeycloakParser.parseKeycloak(jsonKeycloakParser.testJson)
-        println(test.keys(0)("e"))
+        val test = jsonKeycloakParser.parseKeycloak(body.utf8String)
       }
     case resp @ HttpResponse(code, _, _, _) =>
       println("Request failed, response code: " + code)
